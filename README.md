@@ -6,6 +6,8 @@ Off-Timer è un'app Windows leggera e portatile per scegliere quando spegnere, r
 
 Su Windows 10/11, fai doppio clic su `Off-Timer.exe`. Non richiede installazione, connessione Internet o SDK: usa le librerie WPF incluse in Windows.
 
+Scarica l'eseguibile: [Off-Timer.exe](https://github.com/tommowx/off-timer/raw/refs/heads/main/dist/Off-Timer.exe).
+
 ## Uso
 
 - Inserisci giorni, ore, minuti e secondi; scegli l'azione prima di avviare il timer.
@@ -23,3 +25,4 @@ Off-Timer.exe --verify
 ```
 
 Licenza MIT.
+
