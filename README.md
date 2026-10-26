@@ -1,6 +1,6 @@
 # Off-Timer
 
-Off-Timer è un'app Windows leggera e portatile per scegliere quando spegnere, riavviare o sospendere il computer. Interfaccia minimale in stile Apple, timer modificabile e annullamento a portata di mano.
+Off-Timer è un'app Windows leggera e portatile per scegliere quando spegnere, riavviare o sospendere il computer. Interfaccia minimale, timer modificabile e annullamento a portata di mano. Include un'icona originale coordinata con l'app.
 
 ## Avvio
 
@@ -16,6 +16,8 @@ Scarica l'eseguibile: [Off-Timer.exe](https://github.com/tommowx/off-timer/raw/r
 - Puoi annullare il conto in qualunque momento. L'app deve rimanere aperta; chiuderla o riavviare Windows interrompe il timer.
 - La sospensione dipende dal supporto e dalle impostazioni di risparmio energetico del computer.
 
+L'icona Windows è in `assets/off-timer.ico`; il master PNG è in `assets/off-timer-icon.png`.
+
 ## Compilazione e verifiche
 
 Codice C# WPF, compatibile con il compilatore .NET Framework presente in Windows. Il controllo integrato non attiva mai le azioni di sistema:
@@ -25,4 +27,3 @@ Off-Timer.exe --verify
 ```
 
 Licenza MIT.
-

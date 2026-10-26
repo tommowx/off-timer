@@ -11,6 +11,9 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Reflection;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 
 namespace OffTimer
@@ -29,7 +32,7 @@ namespace OffTimer
             }
             catch (Exception ex)
             {
-                File.WriteAllText(Path.Combine(Path.GetTempPath(), "Off-Timer-startup-error.txt"), ex.ToString());
+                File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Off-Timer-startup-error.txt"), ex.ToString());
                 MessageBox.Show("Off-Timer non è riuscita ad aprirsi.\n\n" + ex.Message, "Off-Timer", MessageBoxButton.OK, MessageBoxImage.Error);
                 return 1;
             }
@@ -50,7 +53,11 @@ namespace OffTimer
         private readonly Button _start;
         private readonly Button _cancel;
         private readonly Border _runningCard;
-        private readonly RadioButton[] _actions = new RadioButton[3];
+        private readonly Button[] _actions = new Button[3];
+        private readonly Border[] _actionCards = new Border[3];
+        private readonly Border[] _actionRings = new Border[3];
+        private readonly Ellipse[] _actionDots = new Ellipse[3];
+        private int _selectedAction;
         private readonly DispatcherTimer _timer;
         private DateTime _deadline;
         private bool _running;
@@ -60,6 +67,7 @@ namespace OffTimer
             Title = "Off-Timer"; Width = 460; Height = 740; MinWidth = 420; MinHeight = 650;
             WindowStartupLocation = WindowStartupLocation.CenterScreen; Background = Light; Foreground = Ink;
             FontFamily = new FontFamily("Segoe UI"); ResizeMode = ResizeMode.CanMinimize;
+            UseLayoutRounding = true; SnapsToDevicePixels = true; Icon = LoadIcon();
 
             var layout = new Grid { Margin = new Thickness(30, 23, 30, 24) };
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -69,15 +77,15 @@ namespace OffTimer
 
             var header = new StackPanel { Margin = new Thickness(0, 0, 0, 15) };
             header.Children.Add(Text("OFF-TIMER", 12, Muted, FontWeights.Bold));
-            header.Children.Add(Text("Il tempo, con calma.", 25, Ink, FontWeights.SemiBold, new Thickness(0, 5, 0, 0)));
-            header.Children.Add(Text("Scegli quando e cosa fare. Ci pensiamo noi.", 13, Muted, FontWeights.Normal, new Thickness(0, 4, 0, 0)));
+            header.Children.Add(Text("Pianifica la pausa.", 26, Ink, FontWeights.SemiBold, new Thickness(0, 5, 0, 0)));
+            header.Children.Add(Text("Scegli una durata e cosa fare al termine.", 13, Muted, FontWeights.Normal, new Thickness(0, 4, 0, 0)));
             Grid.SetRow(header, 0); layout.Children.Add(header);
 
             var content = new StackPanel();
             var timeCard = Card(new Thickness(0, 7, 0, 7));
             timeCard.Child = new StackPanel();
             var timePanel = (StackPanel)timeCard.Child;
-            timePanel.Children.Add(Text("DOPO QUANTO", 11, Muted, FontWeights.Bold, new Thickness(1, 0, 0, 12)));
+            timePanel.Children.Add(Text("DURATA", 11, Muted, FontWeights.Bold, new Thickness(1, 0, 0, 12)));
             var timeGrid = new Grid();
             for (int i = 0; i < 7; i++) timeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = i % 2 == 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(10) });
             string[] units = { "giorni", "ore", "minuti", "secondi" };
@@ -134,6 +142,12 @@ namespace OffTimer
         }
 
         private static Brush Brush(string hex) { return (Brush)new BrushConverter().ConvertFromString(hex); }
+        private static ImageSource LoadIcon()
+        {
+            var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("off-timer-icon.png");
+            if (stream == null) return null;
+            using (stream) return BitmapFrame.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        }
         private static TextBlock Text(string value, double size, Brush color, FontWeight weight, Thickness? margin = null, HorizontalAlignment align = HorizontalAlignment.Left)
         { return new TextBlock { Text = value, FontSize = size, Foreground = color, FontWeight = weight, Margin = margin ?? new Thickness(0), HorizontalAlignment = align }; }
         private static Border Card(Thickness margin)
@@ -141,14 +155,19 @@ namespace OffTimer
 
         private UIElement ActionCard(int index, string title, string description)
         {
-            var card = new Border { Background = Brushes.White, BorderBrush = Brush("#E5E5EA"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(13), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 0, 8) };
-            var radio = new RadioButton { GroupName = "Action", IsChecked = index == 0, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0) };
-            AutomationProperties.SetName(radio, title);
-            _actions[index] = radio;
+            var card = new Border { Background = Brushes.White, BorderBrush = Brush("#E8E9ED"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14), Padding = new Thickness(14, 13, 14, 13), Margin = new Thickness(0, 0, 0, 8) };
+            var button = new Button { Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center, FocusVisualStyle = null, Cursor = Cursors.Hand };
+            AutomationProperties.SetName(button, title);
+            AutomationProperties.SetHelpText(button, description);
+            _actions[index] = button; _actionCards[index] = card;
+            var row = new Grid(); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var ring = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1.5), BorderBrush = Brush("#C9CCD2"), Background = Brushes.White, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
+            var dot = new Ellipse { Width = 8, Height = 8, Fill = Blue, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+            ring.Child = dot; Grid.SetColumn(ring, 0); row.Children.Add(ring);
             var panel = new StackPanel(); panel.Children.Add(Text(title, 14, Ink, FontWeights.SemiBold)); panel.Children.Add(Text(description, 12, Muted, FontWeights.Normal, new Thickness(0, 3, 0, 0)));
-            radio.Content = panel; card.Child = radio;
-            radio.Checked += (s, e) => UpdateActionCards();
-            card.MouseLeftButtonUp += (s, e) => { radio.IsChecked = true; };
+            Grid.SetColumn(panel, 2); row.Children.Add(panel); button.Content = row; card.Child = button;
+            _actionRings[index] = ring; _actionDots[index] = dot;
+            button.Click += (s, e) => { _selectedAction = index; UpdateActionCards(); };
             return card;
         }
 
@@ -156,8 +175,12 @@ namespace OffTimer
         {
             for (int i = 0; i < _actions.Length; i++)
             {
-                var border = _actions[i].Parent as Border;
-                if (border != null) { border.BorderBrush = _actions[i].IsChecked == true ? Blue : Brush("#E5E5EA"); border.Background = _actions[i].IsChecked == true ? Brush("#F3F8FF") : Brushes.White; }
+                bool selected = i == _selectedAction;
+                _actionCards[i].BorderBrush = selected ? Brush("#B8D7FF") : Brush("#E8E9ED");
+                _actionCards[i].Background = selected ? Brush("#F4F8FF") : Brushes.White;
+                _actionRings[i].BorderBrush = selected ? Blue : Brush("#C9CCD2");
+                _actionRings[i].Background = selected ? Brush("#EDF5FF") : Brushes.White;
+                _actionDots[i].Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 
@@ -192,7 +215,7 @@ namespace OffTimer
         }
 
         private string SelectedAction()
-        { return _actions[2].IsChecked == true ? "sleep" : _actions[1].IsChecked == true ? "restart" : "shutdown"; }
+        { return _selectedAction == 2 ? "sleep" : _selectedAction == 1 ? "restart" : "shutdown"; }
 
         internal static ActionInfo GetAction(string key)
         {
@@ -293,6 +316,10 @@ namespace OffTimer
             foreach (string[] invalid in new[] { new[] { "0", "24", "0", "0" }, new[] { "0", "0", "60", "0" }, new[] { "0", "0", "0", "60" }, new[] { "0", "0", "0", "0" }, new[] { "3651", "0", "0", "0" }, new[] { "x", "0", "0", "0" } })
                 if (MainWindow.TryCalculateDuration(invalid, out parsed, out error)) throw new Exception("Un input non valido è stato accettato.");
             count++;
+            var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
+            var window = new MainWindow();
+            if (window.Icon == null || window.Content == null || window.Title != "Off-Timer") throw new Exception("Finestra o icona non caricate.");
+            window.Measure(new Size(460, 740)); window.Arrange(new Rect(0, 0, 460, 740)); window.UpdateLayout(); window.Close(); app.Shutdown(); count++;
             Console.WriteLine("Verifiche superate: " + count + ". Spegnimento, riavvio e sospensione non sono stati eseguiti.");
             return 0;
         }
