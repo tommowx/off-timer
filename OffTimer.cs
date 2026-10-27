@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -41,10 +42,11 @@ namespace OffTimer
 
     internal sealed class MainWindow : Window
     {
-        private static readonly Brush Ink = Brush("#17191C");
-        private static readonly Brush Muted = Brush("#70757D");
-        private static readonly Brush Blue = Brush("#087BFF");
-        private static readonly Brush Light = Brush("#F5F5F7");
+        private Brush Ink = Brush("#202723");
+        private Brush Muted = Brush("#68716D");
+        private Brush Accent = Brush("#28745E");
+        private Brush Light = Brush("#F0F2EF");
+        private Brush Surface = Brush("#FAFBF9");
         private readonly TextBox[] _time = new TextBox[4];
         private readonly TextBlock _error;
         private readonly TextBlock _countdown;
@@ -61,10 +63,17 @@ namespace OffTimer
         private readonly DispatcherTimer _timer;
         private DateTime _deadline;
         private bool _running;
+        private bool _fullScreen;
+        private Button _fullScreenButton;
+        private Button _themeButton;
+        private readonly List<Button> _modeButtons = new List<Button>();
+        private Border _timeCard;
+        private bool _darkTheme;
+        private Window _blackScreen;
 
         internal MainWindow()
         {
-            Title = "Off-Timer"; Width = 460; Height = 740; MinWidth = 420; MinHeight = 650;
+            Title = "Off-Timer"; Width = 460; Height = 740; MinWidth = 420; MinHeight = 600;
             WindowStartupLocation = WindowStartupLocation.CenterScreen; Background = Light; Foreground = Ink;
             FontFamily = new FontFamily("Segoe UI"); ResizeMode = ResizeMode.CanMinimize;
             UseLayoutRounding = true; SnapsToDevicePixels = true; Icon = LoadIcon();
@@ -76,15 +85,15 @@ namespace OffTimer
             Content = layout;
 
             var header = new StackPanel { Margin = new Thickness(0, 0, 0, 15) };
-            header.Children.Add(Text("OFF-TIMER", 12, Muted, FontWeights.Bold));
-            header.Children.Add(Text("Pianifica la pausa.", 26, Ink, FontWeights.SemiBold, new Thickness(0, 5, 0, 0)));
-            header.Children.Add(Text("Scegli una durata e cosa fare al termine.", 13, Muted, FontWeights.Normal, new Thickness(0, 4, 0, 0)));
+            header.Children.Add(Text("OFF-TIMER  /  TIMER DI SISTEMA", 11, Muted, FontWeights.Bold));
+            header.Children.Add(Text("Programma un’azione", 24, Ink, FontWeights.SemiBold, new Thickness(0, 8, 0, 0)));
+            header.Children.Add(Text("Il computer si fermerà allo scadere del conto.", 13, Muted, FontWeights.Normal, new Thickness(0, 5, 0, 0)));
             Grid.SetRow(header, 0); layout.Children.Add(header);
 
             var content = new StackPanel();
-            var timeCard = Card(new Thickness(0, 7, 0, 7));
-            timeCard.Child = new StackPanel();
-            var timePanel = (StackPanel)timeCard.Child;
+            _timeCard = Card(new Thickness(0, 7, 0, 7));
+            _timeCard.Child = new StackPanel();
+            var timePanel = (StackPanel)_timeCard.Child;
             timePanel.Children.Add(Text("DURATA", 11, Muted, FontWeights.Bold, new Thickness(1, 0, 0, 12)));
             var timeGrid = new Grid();
             for (int i = 0; i < 7; i++) timeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = i % 2 == 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(10) });
@@ -95,7 +104,7 @@ namespace OffTimer
                 var part = new StackPanel();
                 var input = new TextBox { Text = "0", FontSize = 25, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center,
                     BorderThickness = new Thickness(0), Background = Brushes.Transparent, MaxLength = 4, Padding = new Thickness(0, 4, 0, 2),
-                    VerticalContentAlignment = VerticalAlignment.Center, CaretBrush = Blue };
+                    VerticalContentAlignment = VerticalAlignment.Center, CaretBrush = Accent };
                 AutomationProperties.SetName(input, units[i]);
                 input.PreviewTextInput += (s, e) => e.Handled = !Regex.IsMatch(e.Text, "^\\d+$");
                 DataObject.AddPastingHandler(input, (s, e) => { string v = e.DataObject.GetData(DataFormats.Text) as string; if (v == null || !Regex.IsMatch(v, "^\\d+$")) e.CancelCommand(); });
@@ -108,7 +117,7 @@ namespace OffTimer
             timePanel.Children.Add(timeGrid);
             _error = Text("", 12, Brush("#C93434"), FontWeights.Normal, new Thickness(1, 9, 0, 0));
             _error.TextWrapping = TextWrapping.Wrap; _error.Visibility = Visibility.Collapsed; timePanel.Children.Add(_error);
-            content.Children.Add(timeCard);
+            content.Children.Add(_timeCard);
             content.Children.Add(Text("ALLO SCADERE", 11, Muted, FontWeights.Bold, new Thickness(2, 13, 0, 5)));
 
             string[] labels = { "Spegni il computer", "Riavvia", "Sospendi" };
@@ -127,18 +136,35 @@ namespace OffTimer
             var footer = new StackPanel { Margin = new Thickness(0, 13, 0, 0) };
             _notice = Text("Ti chiederemo conferma prima di programmare.", 11, Muted, FontWeights.Normal, new Thickness(0, 0, 0, 10), HorizontalAlignment.Center);
             _notice.TextAlignment = TextAlignment.Center; _notice.TextWrapping = TextWrapping.Wrap; footer.Children.Add(_notice);
-            _start = new Button { Content = "Avvia timer", Background = Blue, Foreground = Brushes.White, Padding = new Thickness(16, 13, 16, 13),
+            _start = new Button { Content = "Avvia timer", Background = Accent, Foreground = Brushes.White, Padding = new Thickness(16, 13, 16, 13),
                 FontSize = 14, FontWeight = FontWeights.SemiBold, BorderThickness = new Thickness(0), Cursor = Cursors.Hand };
             _start.Click += StartTimer; footer.Children.Add(_start);
             _cancel = new Button { Content = "Annulla timer", Background = Brush("#E9E9EB"), Foreground = Brush("#24262A"), Padding = new Thickness(16, 12, 16, 12),
                 FontSize = 14, FontWeight = FontWeights.SemiBold, BorderThickness = new Thickness(0), Cursor = Cursors.Hand, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 8, 0, 0) };
             _cancel.Click += CancelTimer; footer.Children.Add(_cancel);
+            var displayModes = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+            for (int i = 0; i < 5; i++) displayModes.ColumnDefinitions.Add(new ColumnDefinition { Width = i % 2 == 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(8) });
+            _fullScreenButton = ModeButton("Schermo intero");
+            _fullScreenButton.Click += (s, e) => ToggleFullScreen();
+            Grid.SetColumn(_fullScreenButton, 0); displayModes.Children.Add(_fullScreenButton);
+            var blackButton = ModeButton("Schermo nero");
+            blackButton.Click += (s, e) => ShowBlackScreen();
+            Grid.SetColumn(blackButton, 2); displayModes.Children.Add(blackButton);
+            _themeButton = ModeButton("Tema nero");
+            _themeButton.Click += (s, e) => ToggleTheme();
+            Grid.SetColumn(_themeButton, 4); displayModes.Children.Add(_themeButton);
+            footer.Children.Add(displayModes);
             Grid.SetRow(footer, 2); layout.Children.Add(footer);
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _timer.Tick += (s, e) => UpdateCountdown();
             UpdateActionCards();
             ValidateDuration();
+            KeyDown += (s, e) =>
+            {
+                if (e.Key == Key.F11) { ToggleFullScreen(); e.Handled = true; }
+                else if (e.Key == Key.Escape && _fullScreen) { ToggleFullScreen(); e.Handled = true; }
+            };
         }
 
         private static Brush Brush(string hex) { return (Brush)new BrushConverter().ConvertFromString(hex); }
@@ -148,21 +174,100 @@ namespace OffTimer
             if (stream == null) return null;
             using (stream) return BitmapFrame.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
         }
-        private static TextBlock Text(string value, double size, Brush color, FontWeight weight, Thickness? margin = null, HorizontalAlignment align = HorizontalAlignment.Left)
-        { return new TextBlock { Text = value, FontSize = size, Foreground = color, FontWeight = weight, Margin = margin ?? new Thickness(0), HorizontalAlignment = align }; }
-        private static Border Card(Thickness margin)
-        { return new Border { Background = Brushes.White, CornerRadius = new CornerRadius(18), Padding = new Thickness(18), Margin = margin }; }
+        private TextBlock Text(string value, double size, Brush color, FontWeight weight, Thickness? margin = null, HorizontalAlignment align = HorizontalAlignment.Left)
+        { return new TextBlock { Text = value, FontSize = size, Foreground = color, Tag = Object.ReferenceEquals(color, Ink) ? "ink" : Object.ReferenceEquals(color, Muted) ? "muted" : null, FontWeight = weight, Margin = margin ?? new Thickness(0), HorizontalAlignment = align }; }
+        private Border Card(Thickness margin)
+        { return new Border { Background = Surface, CornerRadius = new CornerRadius(9), Padding = new Thickness(18), Margin = margin }; }
+
+        private Button ModeButton(string label)
+        {
+            var button = new Button { Content = label, Background = Brush("#E4E8E4"), Foreground = Brush("#34413A"), Padding = new Thickness(8, 9, 8, 9),
+                FontSize = 11, FontWeight = FontWeights.SemiBold, BorderThickness = new Thickness(0), Cursor = Cursors.Hand };
+            _modeButtons.Add(button); return button;
+        }
+
+        internal bool IsDarkTheme { get { return _darkTheme; } }
+
+        internal void ToggleTheme()
+        {
+            _darkTheme = !_darkTheme;
+            Ink = Brush(_darkTheme ? "#E5EAE6" : "#202723");
+            Muted = Brush(_darkTheme ? "#A5B0A8" : "#68716D");
+            Accent = Brush(_darkTheme ? "#82C5A0" : "#28745E");
+            Light = Brush(_darkTheme ? "#111512" : "#F0F2EF");
+            Surface = Brush(_darkTheme ? "#1C231E" : "#FAFBF9");
+            Background = Light; Foreground = Ink;
+            _timeCard.Background = Surface; _runningCard.Background = Surface;
+            _start.Background = Accent;
+            _cancel.Background = Brush(_darkTheme ? "#303833" : "#E9E9EB");
+            _cancel.Foreground = Ink;
+            foreach (var input in _time) { input.Foreground = Ink; input.CaretBrush = Accent; }
+            foreach (var button in _modeButtons)
+            {
+                button.Background = Brush(_darkTheme ? "#303833" : "#E4E8E4");
+                button.Foreground = Brush(_darkTheme ? "#D5DED7" : "#34413A");
+            }
+            _themeButton.Content = _darkTheme ? "Tema chiaro" : "Tema nero";
+            for (int i = 0; i < _actionCards.Length; i++)
+            {
+                _actionCards[i].Background = Brush(_darkTheme ? (i == _selectedAction ? "#293C30" : "#1C231E") : (i == _selectedAction ? "#EEF4F0" : "#FAFBF9"));
+                _actionCards[i].BorderBrush = Brush(_darkTheme ? (i == _selectedAction ? "#628C72" : "#343E37") : (i == _selectedAction ? "#78A18F" : "#DDE2DD"));
+                _actionRings[i].Background = Brush(_darkTheme ? "#293C30" : "#FAFBF9");
+                _actionRings[i].BorderBrush = i == _selectedAction ? Accent : Brush(_darkTheme ? "#66716A" : "#BBC3BD");
+                _actionDots[i].Fill = Accent;
+            }
+            UpdateTextColors(this);
+        }
+
+        private void UpdateTextColors(DependencyObject parent)
+        {
+            var text = parent as TextBlock;
+            if (text != null)
+            {
+                if ((string)text.Tag == "ink") text.Foreground = Ink;
+                else if ((string)text.Tag == "muted") text.Foreground = Muted;
+            }
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++) UpdateTextColors(VisualTreeHelper.GetChild(parent, i));
+        }
+
+        internal bool IsFullScreen { get { return _fullScreen; } }
+
+        internal void ToggleFullScreen()
+        {
+            if (_blackScreen != null) return;
+            if (!_fullScreen)
+            {
+                _fullScreen = true; WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; WindowState = WindowState.Maximized;
+                _fullScreenButton.Content = "Esci da schermo intero · Esc";
+            }
+            else
+            {
+                _fullScreen = false; WindowState = WindowState.Normal; WindowStyle = WindowStyle.SingleBorderWindow; ResizeMode = ResizeMode.CanMinimize;
+                _fullScreenButton.Content = "Schermo intero";
+            }
+        }
+
+        private void ShowBlackScreen()
+        {
+            var black = new Window { Title = "Off-Timer · Schermo nero", Background = Brushes.Black, Foreground = Brushes.White,
+                WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, WindowState = WindowState.Maximized,
+                Topmost = true, ShowInTaskbar = false, Cursor = Cursors.None };
+            black.KeyDown += (s, e) => { if (e.Key == Key.Escape) black.Close(); };
+            black.MouseDown += (s, e) => black.Close();
+            black.Closed += (s, e) => { _blackScreen = null; Activate(); };
+            _blackScreen = black; black.Show(); black.Activate();
+        }
 
         private UIElement ActionCard(int index, string title, string description)
         {
-            var card = new Border { Background = Brushes.White, BorderBrush = Brush("#E8E9ED"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14), Padding = new Thickness(14, 13, 14, 13), Margin = new Thickness(0, 0, 0, 8) };
+            var card = new Border { Background = Surface, BorderBrush = Brush("#DDE2DD"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(14, 13, 14, 13), Margin = new Thickness(0, 0, 0, 8) };
             var button = new Button { Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center, FocusVisualStyle = null, Cursor = Cursors.Hand };
             AutomationProperties.SetName(button, title);
             AutomationProperties.SetHelpText(button, description);
             _actions[index] = button; _actionCards[index] = card;
             var row = new Grid(); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var ring = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1.5), BorderBrush = Brush("#C9CCD2"), Background = Brushes.White, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
-            var dot = new Ellipse { Width = 8, Height = 8, Fill = Blue, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+            var ring = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1.5), BorderBrush = Brush("#BBC3BD"), Background = Surface, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
+            var dot = new Ellipse { Width = 8, Height = 8, Fill = Accent, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
             ring.Child = dot; Grid.SetColumn(ring, 0); row.Children.Add(ring);
             var panel = new StackPanel(); panel.Children.Add(Text(title, 14, Ink, FontWeights.SemiBold)); panel.Children.Add(Text(description, 12, Muted, FontWeights.Normal, new Thickness(0, 3, 0, 0)));
             Grid.SetColumn(panel, 2); row.Children.Add(panel); button.Content = row; card.Child = button;
@@ -176,10 +281,10 @@ namespace OffTimer
             for (int i = 0; i < _actions.Length; i++)
             {
                 bool selected = i == _selectedAction;
-                _actionCards[i].BorderBrush = selected ? Brush("#B8D7FF") : Brush("#E8E9ED");
-                _actionCards[i].Background = selected ? Brush("#F4F8FF") : Brushes.White;
-                _actionRings[i].BorderBrush = selected ? Blue : Brush("#C9CCD2");
-                _actionRings[i].Background = selected ? Brush("#EDF5FF") : Brushes.White;
+                _actionCards[i].BorderBrush = Brush(_darkTheme ? (selected ? "#628C72" : "#343E37") : (selected ? "#78A18F" : "#DDE2DD"));
+                _actionCards[i].Background = Brush(_darkTheme ? (selected ? "#293C30" : "#1C231E") : (selected ? "#EEF4F0" : "#FAFBF9"));
+                _actionRings[i].BorderBrush = selected ? Accent : Brush(_darkTheme ? "#66716A" : "#BBC3BD");
+                _actionRings[i].Background = Brush(_darkTheme ? "#293C30" : "#FAFBF9");
                 _actionDots[i].Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
             }
         }
@@ -319,7 +424,12 @@ namespace OffTimer
             var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
             var window = new MainWindow();
             if (window.Icon == null || window.Content == null || window.Title != "Off-Timer") throw new Exception("Finestra o icona non caricate.");
-            window.Measure(new Size(460, 740)); window.Arrange(new Rect(0, 0, 460, 740)); window.UpdateLayout(); window.Close(); app.Shutdown(); count++;
+            window.Measure(new Size(460, 740)); window.Arrange(new Rect(0, 0, 460, 740)); window.UpdateLayout();
+            window.ToggleFullScreen(); if (!window.IsFullScreen || window.WindowStyle != WindowStyle.None) throw new Exception("Schermo intero non attivato.");
+            window.ToggleFullScreen(); if (window.IsFullScreen || window.WindowStyle == WindowStyle.None) throw new Exception("Uscita da schermo intero non riuscita.");
+            window.ToggleTheme(); if (!window.IsDarkTheme || window.Background.ToString() != "#FF111512") throw new Exception("Tema nero non applicato.");
+            window.ToggleTheme(); if (window.IsDarkTheme || window.Background.ToString() != "#FFF0F2EF") throw new Exception("Ripristino tema chiaro non riuscito.");
+            window.Close(); app.Shutdown(); count++;
             Console.WriteLine("Verifiche superate: " + count + ". Spegnimento, riavvio e sospensione non sono stati eseguiti.");
             return 0;
         }
