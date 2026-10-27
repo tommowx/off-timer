@@ -193,6 +193,20 @@ namespace OffTimer
 
         internal bool IsDarkTheme { get { return _darkTheme; } }
         internal string SurfaceColor { get { return _timeCard.Background.ToString(); } }
+        internal bool IsBlackThemeUniform
+        {
+            get
+            {
+                return IsBlack(Light) && IsBlack(_layout.Background) && IsBlack(_scroll.Background) && IsBlack(_footer.Background) &&
+                    IsBlack(_timeCard.Background) && IsBlack(_runningCard.Background) && _actionCards.All(card => IsBlack(card.Background));
+            }
+        }
+
+        private static bool IsBlack(Brush brush)
+        {
+            var solid = brush as SolidColorBrush;
+            return solid != null && solid.Color == Colors.Black;
+        }
 
         internal void ToggleTheme()
         {
@@ -218,7 +232,7 @@ namespace OffTimer
             _themeButton.Content = _darkTheme ? "Tema chiaro" : "Tema nero";
             for (int i = 0; i < _actionCards.Length; i++)
             {
-                _actionCards[i].Background = Brush(_darkTheme ? (i == _selectedAction ? "#111111" : "#000000") : (i == _selectedAction ? "#EEF4F0" : "#FAFBF9"));
+                _actionCards[i].Background = Brush(_darkTheme ? "#000000" : (i == _selectedAction ? "#EEF4F0" : "#FAFBF9"));
                 _actionCards[i].BorderBrush = Brush(_darkTheme ? (i == _selectedAction ? "#777777" : "#292929") : (i == _selectedAction ? "#78A18F" : "#DDE2DD"));
                 _actionRings[i].Background = Brush(_darkTheme ? "#000000" : "#FAFBF9");
                 _actionRings[i].BorderBrush = i == _selectedAction ? Accent : Brush(_darkTheme ? "#666666" : "#BBC3BD");
@@ -290,7 +304,7 @@ namespace OffTimer
             {
                 bool selected = i == _selectedAction;
                 _actionCards[i].BorderBrush = Brush(_darkTheme ? (selected ? "#777777" : "#292929") : (selected ? "#78A18F" : "#DDE2DD"));
-                _actionCards[i].Background = Brush(_darkTheme ? (selected ? "#111111" : "#000000") : (selected ? "#EEF4F0" : "#FAFBF9"));
+                _actionCards[i].Background = Brush(_darkTheme ? "#000000" : (selected ? "#EEF4F0" : "#FAFBF9"));
                 _actionRings[i].BorderBrush = selected ? Accent : Brush(_darkTheme ? "#66716A" : "#BBC3BD");
                 _actionRings[i].Background = Brush(_darkTheme ? "#000000" : "#FAFBF9");
                 _actionDots[i].Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
@@ -442,7 +456,7 @@ namespace OffTimer
             window.Measure(new Size(460, 740)); window.Arrange(new Rect(0, 0, 460, 740)); window.UpdateLayout();
             window.ToggleFullScreen(); if (!window.IsFullScreen || window.WindowStyle != WindowStyle.None) throw new Exception("Schermo intero non attivato.");
             window.ToggleFullScreen(); if (window.IsFullScreen || window.WindowStyle == WindowStyle.None) throw new Exception("Uscita da schermo intero non riuscita.");
-            window.ToggleTheme(); if (!window.IsDarkTheme || window.Background.ToString() != "#FF000000" || window.SurfaceColor != "#FF000000") throw new Exception("Tema nero non applicato a tutta la finestra.");
+            window.ToggleTheme(); if (!window.IsDarkTheme || window.Background.ToString() != "#FF000000" || window.SurfaceColor != "#FF000000" || !window.IsBlackThemeUniform) throw new Exception("Tema nero non applicato a tutta la finestra.");
             window.ToggleTheme(); if (window.IsDarkTheme || window.Background.ToString() != "#FFF0F2EF") throw new Exception("Ripristino tema chiaro non riuscito.");
             window.BeginCountdown(TimeSpan.FromSeconds(4));
             TimeSpan before = TimeSpan.ParseExact(window.CountdownText, @"hh\:mm\:ss", CultureInfo.InvariantCulture);
