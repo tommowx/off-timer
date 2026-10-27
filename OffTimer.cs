@@ -84,6 +84,7 @@ namespace OffTimer
             var layout = new Grid { Margin = new Thickness(30, 23, 30, 24), Background = Light };
             _layout = layout;
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             Content = layout;
@@ -132,10 +133,11 @@ namespace OffTimer
             _due = Text("", 12, Muted, FontWeights.Normal, new Thickness(0), HorizontalAlignment.Center);
             _runningCard = Card(new Thickness(0, 13, 0, 0)); _runningCard.Visibility = Visibility.Collapsed;
             var running = new StackPanel(); running.Children.Add(Text("Timer attivo", 13, Muted, FontWeights.Normal, new Thickness(0), HorizontalAlignment.Center));
-            running.Children.Add(_countdown); running.Children.Add(_due); _runningCard.Child = running; content.Children.Add(_runningCard);
+            running.Children.Add(_countdown); running.Children.Add(_due); _runningCard.Child = running;
+            Grid.SetRow(_runningCard, 1); layout.Children.Add(_runningCard);
 
             var scroll = new ScrollViewer { Content = content, Background = Light, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-            _scroll = scroll; Grid.SetRow(scroll, 1); layout.Children.Add(scroll);
+            _scroll = scroll; Grid.SetRow(scroll, 2); layout.Children.Add(scroll);
 
             var footer = new StackPanel { Margin = new Thickness(0, 13, 0, 0), Background = Light };
             _footer = footer;
@@ -159,7 +161,7 @@ namespace OffTimer
             _themeButton.Click += (s, e) => ToggleTheme();
             Grid.SetColumn(_themeButton, 4); displayModes.Children.Add(_themeButton);
             footer.Children.Add(displayModes);
-            Grid.SetRow(footer, 2); layout.Children.Add(footer);
+            Grid.SetRow(footer, 3); layout.Children.Add(footer);
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _timer.Tick += (s, e) => UpdateCountdown();
@@ -369,6 +371,7 @@ namespace OffTimer
         }
 
         internal string CountdownText { get { return _countdown.Text; } }
+        internal bool IsCountdownPinned { get { return Grid.GetRow(_runningCard) == 1; } }
 
         internal void BeginCountdown(TimeSpan duration)
         {
@@ -376,7 +379,7 @@ namespace OffTimer
         }
 
         internal void CancelTimer(object sender, RoutedEventArgs e)
-        { _timer.Stop(); _running = false; SetRunningUi(); }
+        { _timer.Stop(); _running = false; Title = "Off-Timer"; SetRunningUi(); }
 
         private void SetRunningUi()
         {
@@ -396,11 +399,13 @@ namespace OffTimer
             if (remaining <= TimeSpan.Zero)
             {
                 _timer.Stop(); _countdown.Text = "00:00:00";
+                Title = "Off-Timer";
                 try { PerformAction(SelectedAction()); }
                 catch (Exception ex) { _running = false; SetRunningUi(); MessageBox.Show(this, "Non è stato possibile completare l'operazione.\n\n" + ex.Message, "Azione non completata", MessageBoxButton.OK, MessageBoxImage.Error); }
                 return;
             }
             _countdown.Text = Format(remaining);
+            Title = "Off-Timer · " + _countdown.Text;
             _due.Text = GetAction(SelectedAction()).Label + " · " + DateTime.Now.Add(remaining).ToString("dddd d MMMM, HH:mm", CultureInfo.GetCultureInfo("it-IT"));
         }
 
@@ -459,6 +464,7 @@ namespace OffTimer
             window.ToggleTheme(); if (!window.IsDarkTheme || window.Background.ToString() != "#FF000000" || window.SurfaceColor != "#FF000000" || !window.IsBlackThemeUniform) throw new Exception("Tema nero non applicato a tutta la finestra.");
             window.ToggleTheme(); if (window.IsDarkTheme || window.Background.ToString() != "#FFF0F2EF") throw new Exception("Ripristino tema chiaro non riuscito.");
             window.BeginCountdown(TimeSpan.FromSeconds(4));
+            if (!window.IsCountdownPinned || window.Title == "Off-Timer") throw new Exception("Il conto attivo non è visibile nell'intestazione fissa.");
             TimeSpan before = TimeSpan.ParseExact(window.CountdownText, @"hh\:mm\:ss", CultureInfo.InvariantCulture);
             var frame = new DispatcherFrame();
             var wait = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1300) };

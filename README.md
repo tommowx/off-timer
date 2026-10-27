@@ -13,7 +13,7 @@ Scarica l'eseguibile: [Off-Timer.exe](https://github.com/tommowx/off-timer/raw/r
 - Inserisci giorni, ore, minuti e secondi; scegli l'azione prima di avviare il timer.
 - La durata ammessa è da un secondo a dieci anni. Giorni: 0–3650; ore: 0–23; minuti e secondi: 0–59.
 - Off-Timer mostra un riepilogo e chiede conferma; ricorda di salvare il lavoro aperto, perché Windows chiuderà le app alla scadenza.
-- Quando parte, mostra un conto alla rovescia aggiornato in tempo reale e l'orario previsto dell'azione.
+- Quando parte, mostra il conto alla rovescia aggiornato in un riquadro fisso sopra il modulo e anche nel titolo della finestra; il timer resta visibile mentre scorri.
 - Puoi annullare il conto in qualunque momento. L'app deve rimanere aperta; chiuderla o riavviare Windows interrompe il timer.
 - Premi **Schermo intero** o **F11** per riempire il display; premi **Esc** per tornare alla finestra.
 - **Tema nero** porta a nero uniforme tutta la finestra, comprese le aree vuote; lo stesso pulsante ripristina il tema chiaro.
