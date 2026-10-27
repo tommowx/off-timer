@@ -68,6 +68,9 @@ namespace OffTimer
         private Button _themeButton;
         private readonly List<Button> _modeButtons = new List<Button>();
         private Border _timeCard;
+        private Grid _layout;
+        private ScrollViewer _scroll;
+        private StackPanel _footer;
         private bool _darkTheme;
         private Window _blackScreen;
 
@@ -78,7 +81,8 @@ namespace OffTimer
             FontFamily = new FontFamily("Segoe UI"); ResizeMode = ResizeMode.CanMinimize;
             UseLayoutRounding = true; SnapsToDevicePixels = true; Icon = LoadIcon();
 
-            var layout = new Grid { Margin = new Thickness(30, 23, 30, 24) };
+            var layout = new Grid { Margin = new Thickness(30, 23, 30, 24), Background = Light };
+            _layout = layout;
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -130,10 +134,11 @@ namespace OffTimer
             var running = new StackPanel(); running.Children.Add(Text("Timer attivo", 13, Muted, FontWeights.Normal, new Thickness(0), HorizontalAlignment.Center));
             running.Children.Add(_countdown); running.Children.Add(_due); _runningCard.Child = running; content.Children.Add(_runningCard);
 
-            var scroll = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-            Grid.SetRow(scroll, 1); layout.Children.Add(scroll);
+            var scroll = new ScrollViewer { Content = content, Background = Light, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            _scroll = scroll; Grid.SetRow(scroll, 1); layout.Children.Add(scroll);
 
-            var footer = new StackPanel { Margin = new Thickness(0, 13, 0, 0) };
+            var footer = new StackPanel { Margin = new Thickness(0, 13, 0, 0), Background = Light };
+            _footer = footer;
             _notice = Text("Ti chiederemo conferma prima di programmare.", 11, Muted, FontWeights.Normal, new Thickness(0, 0, 0, 10), HorizontalAlignment.Center);
             _notice.TextAlignment = TextAlignment.Center; _notice.TextWrapping = TextWrapping.Wrap; footer.Children.Add(_notice);
             _start = new Button { Content = "Avvia timer", Background = Accent, Foreground = Brushes.White, Padding = new Thickness(16, 13, 16, 13),
@@ -160,7 +165,7 @@ namespace OffTimer
             _timer.Tick += (s, e) => UpdateCountdown();
             UpdateActionCards();
             ValidateDuration();
-            KeyDown += (s, e) =>
+            PreviewKeyDown += (s, e) =>
             {
                 if (e.Key == Key.F11) { ToggleFullScreen(); e.Handled = true; }
                 else if (e.Key == Key.Escape && _fullScreen) { ToggleFullScreen(); e.Handled = true; }
@@ -187,33 +192,36 @@ namespace OffTimer
         }
 
         internal bool IsDarkTheme { get { return _darkTheme; } }
+        internal string SurfaceColor { get { return _timeCard.Background.ToString(); } }
 
         internal void ToggleTheme()
         {
             _darkTheme = !_darkTheme;
-            Ink = Brush(_darkTheme ? "#E5EAE6" : "#202723");
-            Muted = Brush(_darkTheme ? "#A5B0A8" : "#68716D");
-            Accent = Brush(_darkTheme ? "#82C5A0" : "#28745E");
-            Light = Brush(_darkTheme ? "#111512" : "#F0F2EF");
-            Surface = Brush(_darkTheme ? "#1C231E" : "#FAFBF9");
+            Ink = Brush(_darkTheme ? "#F0F0F0" : "#202723");
+            Muted = Brush(_darkTheme ? "#A0A0A0" : "#68716D");
+            Accent = Brush(_darkTheme ? "#D6D6D6" : "#28745E");
+            Light = Brush(_darkTheme ? "#000000" : "#F0F2EF");
+            Surface = Brush(_darkTheme ? "#000000" : "#FAFBF9");
             Background = Light; Foreground = Ink;
+            _layout.Background = Light; _scroll.Background = Light; _footer.Background = Light;
             _timeCard.Background = Surface; _runningCard.Background = Surface;
             _start.Background = Accent;
-            _cancel.Background = Brush(_darkTheme ? "#303833" : "#E9E9EB");
+            _start.Foreground = Brush(_darkTheme ? "#050505" : "#FFFFFF");
+            _cancel.Background = Brush(_darkTheme ? "#171717" : "#E9E9EB");
             _cancel.Foreground = Ink;
             foreach (var input in _time) { input.Foreground = Ink; input.CaretBrush = Accent; }
             foreach (var button in _modeButtons)
             {
-                button.Background = Brush(_darkTheme ? "#303833" : "#E4E8E4");
-                button.Foreground = Brush(_darkTheme ? "#D5DED7" : "#34413A");
+                button.Background = Brush(_darkTheme ? "#171717" : "#E4E8E4");
+                button.Foreground = Brush(_darkTheme ? "#E8E8E8" : "#34413A");
             }
             _themeButton.Content = _darkTheme ? "Tema chiaro" : "Tema nero";
             for (int i = 0; i < _actionCards.Length; i++)
             {
-                _actionCards[i].Background = Brush(_darkTheme ? (i == _selectedAction ? "#293C30" : "#1C231E") : (i == _selectedAction ? "#EEF4F0" : "#FAFBF9"));
-                _actionCards[i].BorderBrush = Brush(_darkTheme ? (i == _selectedAction ? "#628C72" : "#343E37") : (i == _selectedAction ? "#78A18F" : "#DDE2DD"));
-                _actionRings[i].Background = Brush(_darkTheme ? "#293C30" : "#FAFBF9");
-                _actionRings[i].BorderBrush = i == _selectedAction ? Accent : Brush(_darkTheme ? "#66716A" : "#BBC3BD");
+                _actionCards[i].Background = Brush(_darkTheme ? (i == _selectedAction ? "#111111" : "#000000") : (i == _selectedAction ? "#EEF4F0" : "#FAFBF9"));
+                _actionCards[i].BorderBrush = Brush(_darkTheme ? (i == _selectedAction ? "#777777" : "#292929") : (i == _selectedAction ? "#78A18F" : "#DDE2DD"));
+                _actionRings[i].Background = Brush(_darkTheme ? "#000000" : "#FAFBF9");
+                _actionRings[i].BorderBrush = i == _selectedAction ? Accent : Brush(_darkTheme ? "#666666" : "#BBC3BD");
                 _actionDots[i].Fill = Accent;
             }
             UpdateTextColors(this);
@@ -252,7 +260,7 @@ namespace OffTimer
             var black = new Window { Title = "Off-Timer · Schermo nero", Background = Brushes.Black, Foreground = Brushes.White,
                 WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, WindowState = WindowState.Maximized,
                 Topmost = true, ShowInTaskbar = false, Cursor = Cursors.None };
-            black.KeyDown += (s, e) => { if (e.Key == Key.Escape) black.Close(); };
+            black.PreviewKeyDown += (s, e) => { if (e.Key == Key.Escape) { black.Close(); e.Handled = true; } };
             black.MouseDown += (s, e) => black.Close();
             black.Closed += (s, e) => { _blackScreen = null; Activate(); };
             _blackScreen = black; black.Show(); black.Activate();
@@ -281,10 +289,10 @@ namespace OffTimer
             for (int i = 0; i < _actions.Length; i++)
             {
                 bool selected = i == _selectedAction;
-                _actionCards[i].BorderBrush = Brush(_darkTheme ? (selected ? "#628C72" : "#343E37") : (selected ? "#78A18F" : "#DDE2DD"));
-                _actionCards[i].Background = Brush(_darkTheme ? (selected ? "#293C30" : "#1C231E") : (selected ? "#EEF4F0" : "#FAFBF9"));
+                _actionCards[i].BorderBrush = Brush(_darkTheme ? (selected ? "#777777" : "#292929") : (selected ? "#78A18F" : "#DDE2DD"));
+                _actionCards[i].Background = Brush(_darkTheme ? (selected ? "#111111" : "#000000") : (selected ? "#EEF4F0" : "#FAFBF9"));
                 _actionRings[i].BorderBrush = selected ? Accent : Brush(_darkTheme ? "#66716A" : "#BBC3BD");
-                _actionRings[i].Background = Brush(_darkTheme ? "#293C30" : "#FAFBF9");
+                _actionRings[i].Background = Brush(_darkTheme ? "#000000" : "#FAFBF9");
                 _actionDots[i].Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
             }
         }
@@ -343,10 +351,17 @@ namespace OffTimer
                 "Tra " + pretty + " il PC verrà " + action.Label + ".\n\nSalva prima il lavoro aperto: Windows chiuderà le app alla scadenza.\n\nVuoi avviare il timer?",
                 "Conferma timer", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes) return;
+            BeginCountdown(duration);
+        }
+
+        internal string CountdownText { get { return _countdown.Text; } }
+
+        internal void BeginCountdown(TimeSpan duration)
+        {
             _deadline = DateTime.UtcNow.Add(duration); _running = true; SetRunningUi(); UpdateCountdown(); _timer.Start();
         }
 
-        private void CancelTimer(object sender, RoutedEventArgs e)
+        internal void CancelTimer(object sender, RoutedEventArgs e)
         { _timer.Stop(); _running = false; SetRunningUi(); }
 
         private void SetRunningUi()
@@ -427,8 +442,17 @@ namespace OffTimer
             window.Measure(new Size(460, 740)); window.Arrange(new Rect(0, 0, 460, 740)); window.UpdateLayout();
             window.ToggleFullScreen(); if (!window.IsFullScreen || window.WindowStyle != WindowStyle.None) throw new Exception("Schermo intero non attivato.");
             window.ToggleFullScreen(); if (window.IsFullScreen || window.WindowStyle == WindowStyle.None) throw new Exception("Uscita da schermo intero non riuscita.");
-            window.ToggleTheme(); if (!window.IsDarkTheme || window.Background.ToString() != "#FF111512") throw new Exception("Tema nero non applicato.");
+            window.ToggleTheme(); if (!window.IsDarkTheme || window.Background.ToString() != "#FF000000" || window.SurfaceColor != "#FF000000") throw new Exception("Tema nero non applicato a tutta la finestra.");
             window.ToggleTheme(); if (window.IsDarkTheme || window.Background.ToString() != "#FFF0F2EF") throw new Exception("Ripristino tema chiaro non riuscito.");
+            window.BeginCountdown(TimeSpan.FromSeconds(4));
+            TimeSpan before = TimeSpan.ParseExact(window.CountdownText, @"hh\:mm\:ss", CultureInfo.InvariantCulture);
+            var frame = new DispatcherFrame();
+            var wait = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1300) };
+            wait.Tick += (s, e) => { wait.Stop(); frame.Continue = false; };
+            wait.Start(); Dispatcher.PushFrame(frame);
+            TimeSpan after = TimeSpan.ParseExact(window.CountdownText, @"hh\:mm\:ss", CultureInfo.InvariantCulture);
+            window.CancelTimer(null, null);
+            if (after >= before) throw new Exception("Il conto alla rovescia non diminuisce mentre il timer è attivo.");
             window.Close(); app.Shutdown(); count++;
             Console.WriteLine("Verifiche superate: " + count + ". Spegnimento, riavvio e sospensione non sono stati eseguiti.");
             return 0;

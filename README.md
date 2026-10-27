@@ -15,7 +15,7 @@ Scarica l'eseguibile: [Off-Timer.exe](https://github.com/tommowx/off-timer/raw/r
 - Off-Timer mostra un riepilogo e chiede conferma; ricorda di salvare il lavoro aperto, perché Windows chiuderà le app alla scadenza.
 - Puoi annullare il conto in qualunque momento. L'app deve rimanere aperta; chiuderla o riavviare Windows interrompe il timer.
 - Premi **Schermo intero** o **F11** per riempire il display; premi **Esc** per tornare alla finestra.
-- **Tema nero** scurisce l'interfaccia dell'app; puoi tornare al tema chiaro dallo stesso pulsante.
+- **Tema nero** porta a nero uniforme tutta la finestra, comprese le aree vuote; lo stesso pulsante ripristina il tema chiaro.
 - **Schermo nero** copre il display principale con una schermata nera. Premi **Esc** o fai clic per tornare all'app; il timer continua a funzionare.
 - La sospensione dipende dal supporto e dalle impostazioni di risparmio energetico del computer.
 
