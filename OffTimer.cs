@@ -401,7 +401,7 @@ namespace OffTimer
             var action = GetAction(SelectedAction());
             string pretty = Format(duration);
             var answer = MessageBox.Show(this,
-                "Tra " + pretty + " il PC verrà " + action.Label + ".\n\nSalva prima il lavoro aperto: Windows chiuderà le app alla scadenza.\n\nVuoi avviare il timer?",
+                "Tra " + pretty + " il PC verrà " + action.Label + ".\n\nSalva il lavoro aperto. Per impostazione predefinita Windows tenta di chiudere normalmente le app; la chiusura forzata è facoltativa e può far perdere dati.\n\nVuoi avviare il timer?",
                 "Conferma timer", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes) return;
             BeginCountdown(duration);
