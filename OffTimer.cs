@@ -6,6 +6,8 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -25,6 +27,15 @@ namespace OffTimer
         private static int Main(string[] args)
         {
             if (args.Contains("--verify")) return Checks.Run();
+            bool created;
+            using (var instance = new Mutex(true, "Local\\OffTimer_4B17842F", out created))
+            {
+                if (!created)
+                {
+                    MessageBox.Show("Off-Timer è già aperta. Usa la finestra esistente per controllare o annullare il timer.",
+                        "Off-Timer", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return 2;
+                }
             try
             {
                 var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
@@ -33,9 +44,11 @@ namespace OffTimer
             }
             catch (Exception ex)
             {
-                File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Off-Timer-startup-error.txt"), ex.ToString());
+                try { AppLog.Write("Errore di avvio", ex); } catch { }
                 MessageBox.Show("Off-Timer non è riuscita ad aprirsi.\n\n" + ex.Message, "Off-Timer", MessageBoxButton.OK, MessageBoxImage.Error);
                 return 1;
+            }
+            finally { try { instance.ReleaseMutex(); } catch (ApplicationException) { } }
             }
         }
     }
@@ -55,13 +68,17 @@ namespace OffTimer
         private readonly Button _start;
         private readonly Button _cancel;
         private readonly Border _runningCard;
+        private readonly TextBlock _runningState;
+        private CheckBox _forceClose;
         private readonly Button[] _actions = new Button[3];
         private readonly Border[] _actionCards = new Border[3];
         private readonly Border[] _actionRings = new Border[3];
         private readonly Ellipse[] _actionDots = new Ellipse[3];
         private int _selectedAction;
         private readonly DispatcherTimer _timer;
-        private DateTime _deadline;
+        private readonly Stopwatch _elapsed = new Stopwatch();
+        private readonly Stopwatch _graceElapsed = new Stopwatch();
+        private TimeSpan _duration;
         private bool _running;
         private bool _fullScreen;
         private Button _fullScreenButton;
@@ -110,16 +127,29 @@ namespace OffTimer
                 var input = new TextBox { Text = "0", FontSize = 25, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center,
                     BorderThickness = new Thickness(0), Background = Brushes.Transparent, MaxLength = 4, Padding = new Thickness(0, 4, 0, 2),
                     VerticalContentAlignment = VerticalAlignment.Center, CaretBrush = Accent };
-                AutomationProperties.SetName(input, units[i]);
-                input.PreviewTextInput += (s, e) => e.Handled = !Regex.IsMatch(e.Text, "^\\d+$");
-                DataObject.AddPastingHandler(input, (s, e) => { string v = e.DataObject.GetData(DataFormats.Text) as string; if (v == null || !Regex.IsMatch(v, "^\\d+$")) e.CancelCommand(); });
+                AutomationProperties.SetName(input, units[i] + ", massimo " + max[i].ToString(CultureInfo.InvariantCulture));
+                input.ToolTip = "Da 0 a " + max[i].ToString(CultureInfo.InvariantCulture) + ". Usa ↑ e ↓ per modificare.";
+                input.PreviewTextInput += (s, e) => e.Handled = !Regex.IsMatch(e.Text, "^[0-9]+$");
+                DataObject.AddPastingHandler(input, (s, e) => { string v = e.DataObject.GetData(DataFormats.Text) as string; if (v == null || !Regex.IsMatch(v, "^[0-9]+$")) e.CancelCommand(); });
+                int field = i;
+                input.PreviewKeyDown += (s, e) =>
+                {
+                    if (e.Key == Key.Up || e.Key == Key.Down) { StepInput(field, e.Key == Key.Up ? 1 : -1); e.Handled = true; }
+                };
                 input.TextChanged += (s, e) => ValidateDuration();
+                input.LostFocus += (s, e) => SavePreferences();
                 _time[i] = input; part.Children.Add(input);
                 part.Children.Add(Text(units[i], 11, Muted, FontWeights.Normal, new Thickness(0, 4, 0, 0), HorizontalAlignment.Center));
                 Grid.SetColumn(part, i * 2); timeGrid.Children.Add(part);
                 if (i < 3) { var sep = Text(":", 20, Brush("#A0A3A9"), FontWeights.Normal, new Thickness(0, 7, 0, 0), HorizontalAlignment.Center); Grid.SetColumn(sep, i * 2 + 1); timeGrid.Children.Add(sep); }
             }
             timePanel.Children.Add(timeGrid);
+            var presets = new WrapPanel { Margin = new Thickness(0, 11, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+            presets.Children.Add(PresetButton("15 min", 0, 15));
+            presets.Children.Add(PresetButton("1 ora", 1, 0));
+            presets.Children.Add(PresetButton("2 ore", 2, 0));
+            presets.Children.Add(PresetButton("Azzera", -1, 0));
+            timePanel.Children.Add(presets);
             _error = Text("", 12, Brush("#C93434"), FontWeights.Normal, new Thickness(1, 9, 0, 0));
             _error.TextWrapping = TextWrapping.Wrap; _error.Visibility = Visibility.Collapsed; timePanel.Children.Add(_error);
             content.Children.Add(_timeCard);
@@ -128,11 +158,16 @@ namespace OffTimer
             string[] labels = { "Spegni il computer", "Riavvia", "Sospendi" };
             string[] details = { "Chiude Windows e arresta il PC", "Chiude Windows e lo avvia di nuovo", "Riduce al minimo il consumo di energia" };
             for (int i = 0; i < 3; i++) content.Children.Add(ActionCard(i, labels[i], details[i]));
+            _forceClose = new CheckBox { Content = "Forza la chiusura dei programmi (potresti perdere dati non salvati)",
+                FontSize = 11, Foreground = Muted, Margin = new Thickness(4, 3, 4, 10), VerticalContentAlignment = VerticalAlignment.Center };
+            AutomationProperties.SetName(_forceClose, "Forza chiusura programmi, possibile perdita di dati non salvati");
+            _forceClose.Checked += (s, e) => SavePreferences(); _forceClose.Unchecked += (s, e) => SavePreferences();
+            content.Children.Add(_forceClose);
 
             _countdown = Text("00:00:00", 38, Ink, FontWeights.SemiBold, new Thickness(0, 4, 0, 5), HorizontalAlignment.Center);
             _due = Text("", 12, Muted, FontWeights.Normal, new Thickness(0), HorizontalAlignment.Center);
             _runningCard = Card(new Thickness(0, 13, 0, 0)); _runningCard.Visibility = Visibility.Collapsed;
-            var running = new StackPanel(); running.Children.Add(Text("Timer attivo", 13, Muted, FontWeights.Normal, new Thickness(0), HorizontalAlignment.Center));
+            var running = new StackPanel(); _runningState = Text("Timer attivo", 13, Muted, FontWeights.Normal, new Thickness(0), HorizontalAlignment.Center); running.Children.Add(_runningState);
             running.Children.Add(_countdown); running.Children.Add(_due); _runningCard.Child = running;
             Grid.SetRow(_runningCard, 1); layout.Children.Add(_runningCard);
 
@@ -165,6 +200,8 @@ namespace OffTimer
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _timer.Tick += (s, e) => UpdateCountdown();
+            Closing += HandleClosing;
+            LoadPreferences();
             UpdateActionCards();
             ValidateDuration();
             PreviewKeyDown += (s, e) =>
@@ -326,7 +363,7 @@ namespace OffTimer
             for (int i = 0; i < 4; i++)
             {
                 string value = (values[i] ?? "0").Trim(); if (value.Length == 0) value = "0";
-                if (!Regex.IsMatch(value, "^\\d{1,4}$") || !long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out v[i]) || v[i] > limit[i])
+                if (!Regex.IsMatch(value, "^[0-9]{1,4}$") || !long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out v[i]) || v[i] > limit[i])
                 { error = "Usa solo cifre: giorni (max 3650), ore (0–23), minuti e secondi (0–59)."; return false; }
             }
             duration = TimeSpan.FromDays(v[0]) + TimeSpan.FromHours(v[1]) + TimeSpan.FromMinutes(v[2]) + TimeSpan.FromSeconds(v[3]);
@@ -350,8 +387,8 @@ namespace OffTimer
         {
             switch (key)
             {
-                case "shutdown": return new ActionInfo("spento", "shutdown.exe", "/s /t 0 /f");
-                case "restart": return new ActionInfo("riavviato", "shutdown.exe", "/r /t 0 /f");
+                case "shutdown": return new ActionInfo("spento", "shutdown.exe", "/s /t 0");
+                case "restart": return new ActionInfo("riavviato", "shutdown.exe", "/r /t 0");
                 case "sleep": return new ActionInfo("sospeso", null, null);
                 default: throw new ArgumentOutOfRangeException("key");
             }
@@ -375,11 +412,11 @@ namespace OffTimer
 
         internal void BeginCountdown(TimeSpan duration)
         {
-            _deadline = DateTime.UtcNow.Add(duration); _running = true; SetRunningUi(); UpdateCountdown(); _timer.Start();
+            _duration = duration; _elapsed.Restart(); _running = true; SetRunningUi(); UpdateCountdown(); _timer.Start();
         }
 
         internal void CancelTimer(object sender, RoutedEventArgs e)
-        { _timer.Stop(); _running = false; Title = "Off-Timer"; SetRunningUi(); }
+        { _timer.Stop(); _elapsed.Reset(); _running = false; Title = "Off-Timer"; SetRunningUi(); }
 
         private void SetRunningUi()
         {
@@ -395,12 +432,12 @@ namespace OffTimer
         private void UpdateCountdown()
         {
             if (!_running) return;
-            TimeSpan remaining = _deadline - DateTime.UtcNow;
+            TimeSpan remaining = _duration - _elapsed.Elapsed;
             if (remaining <= TimeSpan.Zero)
             {
                 _timer.Stop(); _countdown.Text = "00:00:00";
                 Title = "Off-Timer";
-                try { PerformAction(SelectedAction()); }
+                try { PerformAction(SelectedAction(), _forceClose.IsChecked == true); }
                 catch (Exception ex) { _running = false; SetRunningUi(); MessageBox.Show(this, "Non è stato possibile completare l'operazione.\n\n" + ex.Message, "Azione non completata", MessageBoxButton.OK, MessageBoxImage.Error); }
                 return;
             }
@@ -410,9 +447,9 @@ namespace OffTimer
         }
 
         internal static string Format(TimeSpan duration)
-        { return duration.TotalDays >= 1 ? ((int)duration.TotalDays).ToString(CultureInfo.InvariantCulture) + " g  " + duration.ToString(@"hh\:mm\:ss") : ((int)duration.TotalHours).ToString("00", CultureInfo.InvariantCulture) + duration.ToString(@"\:mm\:ss"); }
+        { int seconds = Math.Max(0, (int)Math.Ceiling(duration.TotalSeconds)); int days = seconds / 86400; seconds %= 86400; int hours = seconds / 3600; seconds %= 3600; int minutes = seconds / 60; seconds %= 60; return days > 0 ? days.ToString(CultureInfo.InvariantCulture) + " g  " + hours.ToString("00") + ":" + minutes.ToString("00") + ":" + seconds.ToString("00") : hours.ToString("00") + ":" + minutes.ToString("00") + ":" + seconds.ToString("00"); }
 
-        private static void PerformAction(string action)
+        private static void PerformAction(string action, bool forceClose)
         {
             if (action == "sleep")
             {
@@ -420,11 +457,40 @@ namespace OffTimer
                 return;
             }
             ActionInfo info = GetAction(action);
-            using (var process = Process.Start(new ProcessStartInfo(info.Executable, info.Arguments) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden }))
+            string arguments = info.Arguments + (forceClose ? " /f" : "");
+            using (var process = Process.Start(new ProcessStartInfo(info.Executable, arguments) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden }))
             {
                 if (process == null || !process.WaitForExit(3000)) throw new InvalidOperationException("Windows non ha confermato l'avvio.");
                 if (process.ExitCode != 0) throw new InvalidOperationException("Windows ha restituito il codice " + process.ExitCode + ".");
             }
+        }
+
+        private Button PresetButton(string label, int hours, int minutes)
+        {
+            var b = ModeButton(label); b.Margin = new Thickness(3, 0, 3, 0);
+            b.Click += (s, e) => { _time[0].Text = "0"; _time[1].Text = hours.ToString(CultureInfo.InvariantCulture); _time[2].Text = minutes.ToString(CultureInfo.InvariantCulture); _time[3].Text = "0"; if (hours < 0) foreach (var input in _time) input.Text = "0"; SavePreferences(); };
+            return b;
+        }
+        private void StepInput(int field, int step)
+        {
+            int[] max = { 3650, 23, 59, 59 }; int value;
+            if (!int.TryParse(_time[field].Text, out value)) value = 0;
+            _time[field].Text = Math.Max(0, Math.Min(max[field], value + step)).ToString(CultureInfo.InvariantCulture);
+            _time[field].SelectAll();
+        }
+        private string SettingsPath { get { return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OffTimer", "settings.ini"); } }
+        private void LoadPreferences()
+        {
+            try { if (!File.Exists(SettingsPath)) return; string[] v = File.ReadAllLines(SettingsPath); if (v.Length < 6) return; for (int i = 0; i < 4; i++) if (Regex.IsMatch(v[i], "^[0-9]{1,4}$")) _time[i].Text = v[i]; int a; if (int.TryParse(v[4], out a) && a >= 0 && a < 3) _selectedAction = a; _forceClose.IsChecked = v[5] == "1"; } catch { }
+        }
+        private void SavePreferences()
+        {
+            try { string dir = System.IO.Path.GetDirectoryName(SettingsPath); Directory.CreateDirectory(dir); File.WriteAllLines(SettingsPath, _time.Select(x => x.Text).Concat(new[] { _selectedAction.ToString(CultureInfo.InvariantCulture), _forceClose.IsChecked == true ? "1" : "0" }).ToArray()); } catch { }
+        }
+        private void HandleClosing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            if (_running) { var answer = MessageBox.Show(this, "Il timer è attivo. Vuoi annullarlo e chiudere Off-Timer?", "Timer attivo", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No); if (answer != MessageBoxResult.Yes) { e.Cancel = true; return; } CancelTimer(null, null); }
+            SavePreferences();
         }
 
     }
@@ -442,6 +508,16 @@ namespace OffTimer
         internal static extern bool SetSuspendState(bool hibernate, bool forceCritical, bool disableWakeEvent);
     }
 
+    internal static class AppLog
+    {
+        internal static void Write(string message, Exception ex)
+        {
+            string dir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OffTimer");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(System.IO.Path.Combine(dir, "off-timer.log"), DateTime.Now.ToString("s", CultureInfo.InvariantCulture) + " " + message + ": " + ex + Environment.NewLine);
+        }
+    }
+
     internal static class Checks
     {
         internal static int Run()
@@ -449,11 +525,13 @@ namespace OffTimer
             int count = 0;
             if (MainWindow.Format(TimeSpan.FromHours(1).Add(TimeSpan.FromMinutes(2)).Add(TimeSpan.FromSeconds(3))) != "01:02:03") throw new Exception("Formato durata errato."); count++;
             if (MainWindow.Format(TimeSpan.FromDays(3).Add(TimeSpan.FromHours(1))) != "3 g  01:00:00") throw new Exception("Formato giorni errato."); count++;
-            if (MainWindow.GetAction("shutdown").Arguments != "/s /t 0 /f" || MainWindow.GetAction("restart").Arguments != "/r /t 0 /f" || MainWindow.GetAction("sleep").Executable != null) throw new Exception("Azione non associata correttamente."); count++;
+            if (MainWindow.Format(TimeSpan.FromMilliseconds(1)) != "00:00:01") throw new Exception("Un secondo residuo deve restare visibile."); count++;
+            if (MainWindow.GetAction("shutdown").Arguments != "/s /t 0" || MainWindow.GetAction("restart").Arguments != "/r /t 0" || MainWindow.GetAction("sleep").Executable != null) throw new Exception("Azione non associata correttamente."); count++;
             TimeSpan parsed; string error;
             if (!MainWindow.TryCalculateDuration(new[] { "2", "3", "4", "5" }, out parsed, out error) || parsed != TimeSpan.FromDays(2).Add(TimeSpan.FromHours(3)).Add(TimeSpan.FromMinutes(4)).Add(TimeSpan.FromSeconds(5))) throw new Exception("Calcolo durata errato."); count++;
             foreach (string[] invalid in new[] { new[] { "0", "24", "0", "0" }, new[] { "0", "0", "60", "0" }, new[] { "0", "0", "0", "60" }, new[] { "0", "0", "0", "0" }, new[] { "3651", "0", "0", "0" }, new[] { "x", "0", "0", "0" } })
                 if (MainWindow.TryCalculateDuration(invalid, out parsed, out error)) throw new Exception("Un input non valido è stato accettato.");
+            if (MainWindow.TryCalculateDuration(new[] { "١", "0", "0", "0" }, out parsed, out error)) throw new Exception("Sono state accettate cifre non ASCII.");
             count++;
             var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
             var window = new MainWindow();
@@ -479,3 +557,4 @@ namespace OffTimer
         }
     }
 }
+

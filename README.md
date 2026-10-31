@@ -1,33 +1,26 @@
 # Off-Timer
 
-Off-Timer è un'app Windows leggera e portatile per scegliere quando spegnere, riavviare o sospendere il computer. L'interfaccia è essenziale e funzionale; include timer modificabile, annullamento, modalità a schermo intero, tema nero e schermata nera.
+App Windows portatile per programmare lo spegnimento, il riavvio o la sospensione. Include tema nero uniforme, schermo intero, schermata nera, preset rapidi e preferenze salvate localmente.
 
 ## Avvio
 
-Su Windows 10/11, fai doppio clic su `Off-Timer.exe`. Non richiede installazione, connessione Internet o SDK: usa le librerie WPF incluse in Windows.
+Su Windows 10/11, avvia `Off-Timer.exe`. Non richiede installazione o connessione Internet.
 
-Scarica l'eseguibile: [Off-Timer.exe](https://github.com/tommowx/off-timer/raw/refs/heads/main/dist/Off-Timer.exe).
+[Scarica l'ultima versione](https://github.com/tommowx/off-timer/raw/refs/heads/main/dist/Off-Timer.exe).
 
 ## Uso
 
-- Inserisci giorni, ore, minuti e secondi; scegli l'azione prima di avviare il timer.
-- La durata ammessa è da un secondo a dieci anni. Giorni: 0–3650; ore: 0–23; minuti e secondi: 0–59.
-- Off-Timer mostra un riepilogo e chiede conferma; ricorda di salvare il lavoro aperto, perché Windows chiuderà le app alla scadenza.
-- Quando parte, mostra il conto alla rovescia aggiornato in un riquadro fisso sopra il modulo e anche nel titolo della finestra; il timer resta visibile mentre scorri.
-- Puoi annullare il conto in qualunque momento. L'app deve rimanere aperta; chiuderla o riavviare Windows interrompe il timer.
-- Premi **Schermo intero** o **F11** per riempire il display; premi **Esc** per tornare alla finestra.
-- **Tema nero** porta a nero uniforme tutta la finestra, comprese le aree vuote; lo stesso pulsante ripristina il tema chiaro.
-- **Schermo nero** copre il display principale con una schermata nera. Premi **Esc** o fai clic per tornare all'app; il timer continua a funzionare.
+- Imposta giorni, ore, minuti e secondi oppure scegli un preset; seleziona l'azione e avvia.
+- Durata da un secondo a dieci anni. Le preferenze restano sul PC in `%LOCALAPPDATA%\OffTimer`.
+- Il riepilogo richiede conferma prima dell'avvio. Il timer usa un contatore monotono e continua anche se cambia l'orologio di Windows.
+- Puoi annullare il timer; se chiudi la finestra mentre è attivo, Off-Timer chiede conferma e annulla il conto solo se scegli di chiudere.
+- Per impostazione predefinita Windows prova a chiudere normalmente le app. L'opzione di forzatura è esplicita e può far perdere dati non salvati.
+- `F11` attiva lo schermo intero; `Esc` esce. Dalla schermata nera si esce con `Esc` o clic.
 - La sospensione dipende dal supporto e dalle impostazioni di risparmio energetico del computer.
 
-L'icona Windows è in `assets/off-timer.ico`; il master PNG è in `assets/off-timer-icon.png`.
+## Verifica
 
-## Compilazione e verifiche
-
-Codice C# WPF, compatibile con il compilatore .NET Framework presente in Windows. Il controllo integrato non attiva mai le azioni di sistema:
-
-```powershell
-Off-Timer.exe --verify
-```
+Il controllo integrato non esegue mai spegnimento, riavvio o sospensione: `Off-Timer.exe --verify`.
 
 Licenza MIT.
+
